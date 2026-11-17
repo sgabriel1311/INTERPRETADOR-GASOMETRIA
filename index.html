@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GasoGuide — Diagnóstico e Conduta em Gasometria</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    :root { --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --muted: #94a3b8; --accent: #0ea5e9; --accent-hover: #0284c7; --cam: #10b981; --cam-hover: #059669; --border: #334155; }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); margin: 0; padding: 20px 14px; display: flex; justify-content: center; }
+    .container { max-width: 820px; width: 100%; }
+    h1 { font-size: 1.45rem; margin: 0 0 6px; }
+    .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 18px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+    .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 540px) { .actions-grid { grid-template-columns: 1fr; } }
+    .btn-action { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 22px 14px; border-radius: 12px; border: 2px dashed var(--border); background: rgba(15, 23, 42, 0.5); color: var(--text); cursor: pointer; font-size: 0.95rem; font-weight: 600; transition: 0.2s; text-align: center; }
+    .btn-action:hover, .btn-action.dragover { border-color: var(--accent); background: rgba(14, 165, 233, 0.1); }
+    .btn-cam { border-color: rgba(16, 185, 129, 0.5); background: rgba(16, 185, 129, 0.08); }
+    .btn-cam:hover { border-color: var(--cam); background: rgba(16, 185, 129, 0.16); }
+    .btn-sub { font-size: 0.78rem; font-weight: 400; color: var(--muted); }
+    .preview-box { margin-top: 12px; display: none; text-align: center; }
+    .preview-box img { max-height: 180px; border-radius: 8px; border: 1px solid var(--border); }
+    .result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    textarea { width: 100%; min-height: 340px; background: var(--bg); color: #e2e8f0; border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-family: monospace; font-size: 0.92rem; line-height: 1.6; resize: vertical; }
+    .copy-btn { background: var(--accent); color: white; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+    .copy-btn:hover { background: var(--accent-hover); }
+    .status { font-size: 0.85rem; color: var(--muted); margin-top: 12px; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🫁 GasoGuide — Diagnóstico e Condutas em Gasometria</h1>
+    <div class="subtitle">Tire uma foto do visor/papel do gasômetro na hora ou envie o PDF para análise separada (Arterial vs. Venosa) com condutas.</div>
+
+    <div class="card">
+      <div class="actions-grid">
+        <label class="btn-action btn-cam" for="cameraInput">
+          <span>📷 Tirar Foto Agora (Celular)</span>
+          <span class="btn-sub">Fita impressa ou tela do gasômetro</span>
+          <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden />
+        </label>
+
+        <div class="btn-action" id="dropZone">
+          <span>📄 Enviar PDF ou Galeria</span>
+          <span class="btn-sub">Clique ou arraste o arquivo aqui</span>
+          <input type="file" id="fileInput" accept="application/pdf,image/*" hidden />
+        </div>
+      </div>
+
+      <div class="preview-box" id="previewBox">
+        <img id="previewImg" alt="Prévia da gasometria" />
+      </div>
+
+      <div class="status" id="status">Aguardando foto ou PDF da gasometria...</div>
+    </div>
