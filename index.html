@@ -15,7 +15,8 @@
     .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 540px) { .actions-grid { grid-template-columns: 1fr; } }
 
-    .btn-label {
+    .btn-box {
+      position: relative;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -30,19 +31,22 @@
       font-size: 0.95rem;
       font-weight: 600;
       text-align: center;
-      cursor: pointer;
+      overflow: hidden;
     }
     .btn-cam { border-color: rgba(16, 185, 129, 0.6); background: rgba(16, 185, 129, 0.08); }
-    .btn-sub { font-size: 0.78rem; font-weight: 400; color: var(--muted); }
+    .btn-sub { font-size: 0.78rem; font-weight: 400; color: var(--muted); pointer-events: none; }
+    .btn-title { pointer-events: none; }
 
-    /* Ocultação segura sem bloquear o evento change no iOS/Android */
-    .safe-file-input {
-      width: 0.1px;
-      height: 0.1px;
-      opacity: 0;
-      overflow: hidden;
+    /* Input cobrindo 100% da caixa com fonte padrão 16px para funcionar em iOS e Android */
+    .overlay-input {
       position: absolute;
-      z-index: -1;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+      z-index: 5;
+      font-size: 16px;
     }
 
     .preview-box { margin-top: 12px; display: none; text-align: center; }
@@ -62,26 +66,25 @@
 
     <div class="card">
       <div class="actions-grid">
-        <label for="cameraInput" class="btn-label btn-cam">
-          <span>📷 Tirar Foto Agora (Celular)</span>
+        <div class="btn-box btn-cam">
+          <span class="btn-title">📷 Tirar Foto Agora (Celular)</span>
           <span class="btn-sub">Fita impressa ou tela do gasômetro</span>
-        </label>
+          <input type="file" id="cameraInput" class="overlay-input" accept="image/*" capture="environment" />
+        </div>
 
-        <label for="fileInput" class="btn-label">
-          <span>📄 Enviar PDF ou Galeria</span>
+        <div class="btn-box">
+          <span class="btn-title">📄 Enviar PDF ou Galeria</span>
           <span class="btn-sub">Toque para escolher PDF ou foto salva</span>
-        </label>
+          <input type="file" id="fileInput" class="overlay-input" />
+        </div>
       </div>
-
-      <input type="file" id="cameraInput" class="safe-file-input" accept="image/*" capture="environment" />
-      <input type="file" id="fileInput" class="safe-file-input" />
 
       <div class="preview-box" id="previewBox">
         <img id="previewImg" alt="Prévia da gasometria" />
       </div>
 
-      <div class="status" id="status">Pronto (v4). Aguardando foto ou PDF...</div>
-      <div class="version-tag">Worker: interpretadorgaso | Build v4</div>
+      <div class="status" id="status">Pronto (v5). Aguardando foto ou PDF...</div>
+      <div class="version-tag">Worker: interpretadorgaso | Build v5</div>
     </div>
 
     <div class="card" id="resultCard" style="display:none;">
@@ -149,11 +152,91 @@ PARÂMETROS: pH X | pCO2 X | pO2 X | HCO3 X | BE X | satO2 X% (incluir Lactato s
     const previewImg = document.getElementById('previewImg');
     const copyBtn = document.getElementById('copyBtn');
 
-    cameraInput.addEventListener('change', function() {
-      if (this.files && this.files[0]) {
-        iniciarUpload(this.files[0]);
+    function aoSelecionarArquivo(evento) {
+      const lista = evento.target.files;
+      if (lista && lista.length > 0) {
+        iniciarUpload(lista[0]);
       }
+    }
+
+    cameraInput.addEventListener('change', aoSelecionarArquivo);
+    fileInput.addEventListener('change', aoSelecionarArquivo);
+
+    copyBtn.addEventListener('click', function() {
+      navigator.clipboard.writeText(outputEl.value);
+      copyBtn.textContent = 'Copiado!';
+      setTimeout(() => copyBtn.textContent = 'Copiar Texto', 1500);
     });
 
-    fileInput.addEventListener('change', function() {
-      if (this.files && this.files
+    function carregarPdfJs() {
+      return new Promise((resolve, reject) => {
+        if (window.pdfjsLib) {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          resolve(window.pdfjsLib);
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+        script.onload = () => {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          resolve(window.pdfjsLib);
+        };
+        script.onerror = () => reject(new Error('Falha ao carregar leitor de PDF.'));
+        document.head.appendChild(script);
+      });
+    }
+
+    function prepararImagem(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const dataUrlOriginal = e.target.result;
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const maxDim = 1000;
+              let width = img.width;
+              let height = img.height;
+              if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                  height = Math.round((height * maxDim) / width);
+                  width = maxDim;
+                } else {
+                  width = Math.round((width * maxDim) / height);
+                  height = maxDim;
+                }
+              }
+              const canvas = document.createElement('canvas');
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, width, height);
+              const compressedUrl = canvas.toDataURL('image/jpeg', 0.80);
+              resolve({
+                dataUrl: compressedUrl,
+                base64: compressedUrl.split(',')[1],
+                mimeType: 'image/jpeg'
+              });
+            } catch (_) {
+              resolve({
+                dataUrl: dataUrlOriginal,
+                base64: dataUrlOriginal.split(',')[1],
+                mimeType: file.type || 'image/jpeg'
+              });
+            }
+          };
+          img.onerror = () => {
+            resolve({
+              dataUrl: dataUrlOriginal,
+              base64: dataUrlOriginal.split(',')[1],
+              mimeType: file.type || 'image/jpeg'
+            });
+          };
+          img.src = dataUrlOriginal;
+        };
+        reader.onerror = () => reject(new Error('Falha ao ler arquivo de imagem.'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function extrair
