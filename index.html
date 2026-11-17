@@ -37,7 +37,6 @@
     .btn-sub { font-size: 0.78rem; font-weight: 400; color: var(--muted); pointer-events: none; }
     .btn-title { pointer-events: none; }
 
-    /* Input cobrindo 100% da caixa com fonte padrão 16px para funcionar em iOS e Android */
     .overlay-input {
       position: absolute;
       inset: 0;
@@ -49,13 +48,27 @@
       font-size: 16px;
     }
 
+    .manual-btn {
+      display: none;
+      width: 100%;
+      margin-top: 12px;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      background: #10b981;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
     .preview-box { margin-top: 12px; display: none; text-align: center; }
     .preview-box img { max-height: 180px; border-radius: 8px; border: 1px solid var(--border); }
     .result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     textarea { width: 100%; min-height: 340px; background: var(--bg); color: #e2e8f0; border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-family: monospace; font-size: 0.92rem; line-height: 1.6; resize: vertical; }
     .copy-btn { background: var(--accent); color: white; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
     .copy-btn:hover { background: var(--accent-hover); }
-    .status { font-size: 0.88rem; color: #38bdf8; margin-top: 12px; word-break: break-word; font-weight: 500; }
+    .status { font-size: 0.9rem; color: #38bdf8; margin-top: 12px; word-break: break-word; font-weight: 600; }
     .version-tag { font-size: 0.72rem; color: var(--muted); text-align: right; margin-top: 6px; }
   </style>
 </head>
@@ -79,12 +92,14 @@
         </div>
       </div>
 
+      <button type="button" id="manualAnalyzeBtn" class="manual-btn">▶️ Analisar Arquivo Selecionado</button>
+
       <div class="preview-box" id="previewBox">
         <img id="previewImg" alt="Prévia da gasometria" />
       </div>
 
-      <div class="status" id="status">Pronto (v5). Aguardando foto ou PDF...</div>
-      <div class="version-tag">Worker: interpretadorgaso | Build v5</div>
+      <div class="status" id="status">Pronto (v6). Toque em uma opção acima.</div>
+      <div class="version-tag">Worker: interpretadorgaso | Build v6</div>
     </div>
 
     <div class="card" id="resultCard" style="display:none;">
@@ -145,6 +160,7 @@ PARÂMETROS: pH X | pCO2 X | pO2 X | HCO3 X | BE X | satO2 X% (incluir Lactato s
 
     const cameraInput = document.getElementById('cameraInput');
     const fileInput = document.getElementById('fileInput');
+    const manualAnalyzeBtn = document.getElementById('manualAnalyzeBtn');
     const statusEl = document.getElementById('status');
     const resultCard = document.getElementById('resultCard');
     const outputEl = document.getElementById('output');
@@ -152,15 +168,44 @@ PARÂMETROS: pH X | pCO2 X | pO2 X | HCO3 X | BE X | satO2 X% (incluir Lactato s
     const previewImg = document.getElementById('previewImg');
     const copyBtn = document.getElementById('copyBtn');
 
-    function aoSelecionarArquivo(evento) {
-      const lista = evento.target.files;
-      if (lista && lista.length > 0) {
-        iniciarUpload(lista[0]);
+    let ultimoArquivoProcessado = null;
+    let arquivoPendente = null;
+
+    function verificarArquivos() {
+      const f1 = cameraInput.files && cameraInput.files[0];
+      const f2 = fileInput.files && fileInput.files[0];
+      const f = f1 || f2;
+
+      if (f) {
+        const assinatura = `${f.name}_${f.size}_${f.lastModified}`;
+        if (assinatura !== ultimoArquivoProcessado) {
+          ultimoArquivoProcessado = assinatura;
+          arquivoPendente = f;
+          manualAnalyzeBtn.style.display = 'block';
+          iniciarUpload(f);
+        }
       }
     }
 
-    cameraInput.addEventListener('change', aoSelecionarArquivo);
-    fileInput.addEventListener('change', aoSelecionarArquivo);
+    // Escuta múltiplos eventos e retorno de foco da janela (quando fecha a câmera/galeria)
+    cameraInput.addEventListener('change', verificarArquivos);
+    cameraInput.addEventListener('input', verificarArquivos);
+    fileInput.addEventListener('change', verificarArquivos);
+    fileInput.addEventListener('input', verificarArquivos);
+    window.addEventListener('focus', () => setTimeout(verificarArquivos, 300));
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) setTimeout(verificarArquivos, 300);
+    });
+    setInterval(verificarArquivos, 800);
+
+    manualAnalyzeBtn.addEventListener('click', () => {
+      const f = (cameraInput.files && cameraInput.files[0]) || (fileInput.files && fileInput.files[0]) || arquivoPendente;
+      if (f) {
+        iniciarUpload(f);
+      } else {
+        statusEl.textContent = '⚠️ Nenhum arquivo encontrado na memória. Selecione novamente.';
+      }
+    });
 
     copyBtn.addEventListener('click', function() {
       navigator.clipboard.writeText(outputEl.value);
@@ -239,4 +284,87 @@ PARÂMETROS: pH X | pCO2 X | pO2 X | HCO3 X | BE X | satO2 X% (incluir Lactato s
       });
     }
 
-    async function extrair
+    async function extrairTextoPdf(file) {
+      const pdfjs = await carregarPdfJs();
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        fullText += content.items.map(item => item.str).join(' ') + '\n';
+      }
+      return fullText.trim();
+    }
+
+    async function iniciarUpload(file) {
+      statusEl.textContent = `⏳ Arquivo detectado: "${file.name}" (${Math.round(file.size / 1024)} KB). Preparando...`;
+      resultCard.style.display = 'block';
+      outputEl.value = '';
+      previewBox.style.display = 'none';
+
+      try {
+        let payload = { systemInstruction: SYSTEM_INSTRUCTION };
+        const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+        const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic|heif)$/i.test(file.name);
+
+        if (isImage) {
+          statusEl.textContent = '📸 Otimizando foto e enviando...';
+          const imgData = await prepararImagem(file);
+          previewImg.src = imgData.dataUrl;
+          previewBox.style.display = 'block';
+          payload.imageBase64 = imgData.base64;
+          payload.mimeType = imgData.mimeType;
+        } else if (isPdf) {
+          statusEl.textContent = '📄 Lendo PDF e enviando...';
+          const textoPdf = await extrairTextoPdf(file);
+          if (!textoPdf) {
+            throw new Error('O PDF está vazio ou é uma imagem escaneada sem texto.');
+          }
+          payload.text = textoPdf;
+        } else {
+          throw new Error(`Formato não suportado (${file.type || file.name}).`);
+        }
+
+        statusEl.textContent = '🚀 Conectando ao servidor e gerando análise...';
+
+        const response = await fetch(WORKER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const erroTexto = await response.text();
+          throw new Error(`Erro ${response.status}: ${erroTexto}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                const chunk = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                outputEl.value += chunk;
+              } catch (_) {}
+            }
+          }
+        }
+        statusEl.textContent = '✅ Análise e condutas concluídas!';
+      } catch (err) {
+        statusEl.textContent = '❌ ' + err.message;
+      }
+    }
+  </script>
+</body>
+</html>
