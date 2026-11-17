@@ -15,10 +15,11 @@
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
     .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 540px) { .actions-grid { grid-template-columns: 1fr; } }
-    .btn-action { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 22px 14px; border-radius: 12px; border: 2px dashed var(--border); background: rgba(15, 23, 42, 0.5); color: var(--text); cursor: pointer; font-size: 0.95rem; font-weight: 600; transition: 0.2s; text-align: center; }
+    .btn-action { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 22px 14px; border-radius: 12px; border: 2px dashed var(--border); background: rgba(15, 23, 42, 0.5); color: var(--text); cursor: pointer; font-size: 0.95rem; font-weight: 600; transition: 0.2s; text-align: center; overflow: hidden; }
     .btn-action:hover, .btn-action.dragover { border-color: var(--accent); background: rgba(14, 165, 233, 0.1); }
     .btn-cam { border-color: rgba(16, 185, 129, 0.5); background: rgba(16, 185, 129, 0.08); }
     .btn-cam:hover { border-color: var(--cam); background: rgba(16, 185, 129, 0.16); }
+    .btn-action input[type="file"] { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
     .btn-sub { font-size: 0.78rem; font-weight: 400; color: var(--muted); }
     .preview-box { margin-top: 12px; display: none; text-align: center; }
     .preview-box img { max-height: 180px; border-radius: 8px; border: 1px solid var(--border); }
@@ -36,19 +37,18 @@
 
     <div class="card">
       <div class="actions-grid">
-        <div class="btn-action btn-cam" id="camBtn">
+        <div class="btn-action btn-cam">
           <span>📷 Tirar Foto Agora (Celular)</span>
           <span class="btn-sub">Fita impressa ou tela do gasômetro</span>
+          <input type="file" id="cameraInput" accept="image/*" capture="environment" />
         </div>
 
         <div class="btn-action" id="dropZone">
           <span>📄 Enviar PDF ou Galeria</span>
           <span class="btn-sub">Clique ou arraste o arquivo aqui</span>
+          <input type="file" id="fileInput" accept="application/pdf,image/*" />
         </div>
       </div>
-
-      <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;" />
-      <input type="file" id="fileInput" accept="application/pdf,image/*" style="display:none;" />
 
       <div class="preview-box" id="previewBox">
         <img id="previewImg" alt="Prévia da gasometria" />
@@ -67,7 +67,7 @@
   </div>
 
   <script>
-    const WORKER_URL = "https://interpretadorgaso.lgpsluizgabriel.workers.dev";
+    const WORKER_URL = "https://copylabs.lgpsluizgabriel.workers.dev";
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -115,7 +115,6 @@ PARÂMETROS: pH X | pCO2 X | pO2 X | HCO3 X | BE X | satO2 X% (incluir Lactato s
 - Otimização Hemodinâmica e Perfusional (Surviving Sepsis Campaign): [Teste de responsividade a fluidos, cristaloides balanceados, vasopressor precoce se hipotensão, investigação de foco infeccioso/choque se hiperlactatemia ou SvcO2 baixa]
 - Conduta Diagnóstica: [Indicação de coleta de gasometria arterial pareada caso haja suspeita de insuficiência respiratória ou choque]`;
 
-    const camBtn = document.getElementById('camBtn');
     const cameraInput = document.getElementById('cameraInput');
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
@@ -125,16 +124,6 @@ PARÂMETROS: pH X | pCO2 X | pO2 X | HCO3 X | BE X | satO2 X% (incluir Lactato s
     const resultCard = document.getElementById('resultCard');
     const outputEl = document.getElementById('output');
     const copyBtn = document.getElementById('copyBtn');
-
-    camBtn.addEventListener('click', () => {
-      cameraInput.value = '';
-      cameraInput.click();
-    });
-
-    dropZone.addEventListener('click', () => {
-      fileInput.value = '';
-      fileInput.click();
-    });
 
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
@@ -158,7 +147,7 @@ PARÂMETROS: pH X | pCO2 X | pO2 X | HCO3 X | BE X | satO2 X% (incluir Lactato s
       setTimeout(() => copyBtn.textContent = 'Copiar Texto', 1500);
     });
 
-    function prepareImage(file, maxDim = 1400, quality = 0.85) {
+    function prepareImage(file, maxDim = 1200, quality = 0.82) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (event) => {
@@ -196,7 +185,6 @@ PARÂMETROS: pH X | pCO2 X | pO2 X | HCO3 X | BE X | satO2 X% (incluir Lactato s
               });
             }
           };
-          // Fallback caso o navegador não consiga renderizar HEIC no canvas
           img.onerror = () => {
             resolve({
               dataUrl: dataUrlOriginal,
