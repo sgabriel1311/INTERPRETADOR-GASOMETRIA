@@ -15,12 +15,12 @@
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
     .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 540px) { .actions-grid { grid-template-columns: 1fr; } }
-    .btn-action { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 22px 14px; border-radius: 12px; border: 2px dashed var(--border); background: rgba(15, 23, 42, 0.5); color: var(--text); cursor: pointer; font-size: 0.95rem; font-weight: 600; transition: 0.2s; text-align: center; overflow: hidden; }
+    .btn-action { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 22px 14px; border-radius: 12px; border: 2px dashed var(--border); background: rgba(15, 23, 42, 0.5); color: var(--text); cursor: pointer; font-size: 0.95rem; font-weight: 600; transition: 0.2s; text-align: center; user-select: none; -webkit-tap-highlight-color: transparent; }
     .btn-action:hover, .btn-action.dragover { border-color: var(--accent); background: rgba(14, 165, 233, 0.1); }
     .btn-cam { border-color: rgba(16, 185, 129, 0.5); background: rgba(16, 185, 129, 0.08); }
     .btn-cam:hover { border-color: var(--cam); background: rgba(16, 185, 129, 0.16); }
-    .btn-action input[type="file"] { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
     .btn-sub { font-size: 0.78rem; font-weight: 400; color: var(--muted); }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
     .preview-box { margin-top: 12px; display: none; text-align: center; }
     .preview-box img { max-height: 180px; border-radius: 8px; border: 1px solid var(--border); }
     .result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -37,18 +37,19 @@
 
     <div class="card">
       <div class="actions-grid">
-        <div class="btn-action btn-cam">
+        <label for="cameraInput" class="btn-action btn-cam">
           <span>📷 Tirar Foto Agora (Celular)</span>
           <span class="btn-sub">Fita impressa ou tela do gasômetro</span>
-          <input type="file" id="cameraInput" accept="image/*" capture="environment" />
-        </div>
+        </label>
 
-        <div class="btn-action" id="dropZone">
+        <label for="fileInput" class="btn-action" id="dropZone">
           <span>📄 Enviar PDF ou Galeria</span>
-          <span class="btn-sub">Clique ou arraste o arquivo aqui</span>
-          <input type="file" id="fileInput" accept="application/pdf,image/*" />
-        </div>
+          <span class="btn-sub">Toque para escolher PDF ou foto salva</span>
+        </label>
       </div>
+
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" class="visually-hidden" />
+      <input type="file" id="fileInput" class="visually-hidden" />
 
       <div class="preview-box" id="previewBox">
         <img id="previewImg" alt="Prévia da gasometria" />
@@ -60,7 +61,7 @@
     <div class="card" id="resultCard" style="display:none;">
       <div class="result-header">
         <strong>Parecer Gasométrico e Condutas:</strong>
-        <button class="copy-btn" id="copyBtn">Copiar Texto</button>
+        <button class="copy-btn" id="copyBtn" type="button">Copiar Texto</button>
       </div>
       <textarea id="output" readonly></textarea>
     </div>
@@ -134,11 +135,17 @@ PARÂMETROS: pH X | pCO2 X | pO2 X | HCO3 X | BE X | satO2 X% (incluir Lactato s
     });
 
     cameraInput.addEventListener('change', (e) => {
-      if (e.target.files[0]) handleFile(e.target.files[0]);
+      if (e.target.files[0]) {
+        handleFile(e.target.files[0]);
+        e.target.value = '';
+      }
     });
 
     fileInput.addEventListener('change', (e) => {
-      if (e.target.files[0]) handleFile(e.target.files[0]);
+      if (e.target.files[0]) {
+        handleFile(e.target.files[0]);
+        e.target.value = '';
+      }
     });
 
     copyBtn.addEventListener('click', () => {
@@ -218,6 +225,7 @@ PARÂMETROS: pH X | pCO2 X | pO2 X | HCO3 X | BE X | satO2 X% (incluir Lactato s
 
       try {
         let payload = { systemInstruction: SYSTEM_INSTRUCTION };
+        const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
         const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic|heif)$/i.test(file.name);
 
         if (isImage) {
@@ -227,9 +235,11 @@ PARÂMETROS: pH X | pCO2 X | pO2 X | HCO3 X | BE X | satO2 X% (incluir Lactato s
           previewBox.style.display = 'block';
           payload.imageBase64 = imgData.base64;
           payload.mimeType = imgData.mimeType;
-        } else {
+        } else if (isPdf) {
           statusEl.textContent = '⚡ Lendo PDF da gasometria e gerando condutas...';
           payload.text = await extractPdfText(file);
+        } else {
+          throw new Error('Formato não suportado. Envie um arquivo PDF ou uma foto (JPG/PNG/HEIC).');
         }
 
         const response = await fetch(WORKER_URL, {
