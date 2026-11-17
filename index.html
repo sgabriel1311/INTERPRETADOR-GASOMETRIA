@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GasoGuide — Diagnóstico e Conduta em Gasometria</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
     :root { --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --muted: #94a3b8; --accent: #0ea5e9; --accent-hover: #0284c7; --cam: #10b981; --border: #334155; }
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -16,7 +15,6 @@
     .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 540px) { .actions-grid { grid-template-columns: 1fr; } }
     
-    /* Caixa do botão com o input real cobrindo 100% da área */
     .btn-box {
       position: relative;
       display: flex;
@@ -39,7 +37,6 @@
     .btn-sub { font-size: 0.78rem; font-weight: 400; color: var(--muted); pointer-events: none; }
     .btn-title { pointer-events: none; }
 
-    /* O dedo toca DIRETAMENTE no input nativo do navegador */
     .native-file-input {
       position: absolute;
       top: 0;
@@ -58,7 +55,7 @@
     textarea { width: 100%; min-height: 340px; background: var(--bg); color: #e2e8f0; border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-family: monospace; font-size: 0.92rem; line-height: 1.6; resize: vertical; }
     .copy-btn { background: var(--accent); color: white; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
     .copy-btn:hover { background: var(--accent-hover); }
-    .status { font-size: 0.85rem; color: var(--muted); margin-top: 12px; word-break: break-word; }
+    .status { font-size: 0.88rem; color: #38bdf8; margin-top: 12px; word-break: break-word; font-weight: 500; }
   </style>
 </head>
 <body>
@@ -71,13 +68,13 @@
         <div class="btn-box btn-cam">
           <span class="btn-title">📷 Tirar Foto Agora (Celular)</span>
           <span class="btn-sub">Fita impressa ou tela do gasômetro</span>
-          <input type="file" id="cameraInput" class="native-file-input" accept="image/*" capture="environment" />
+          <input type="file" id="cameraInput" class="native-file-input" accept="image/*" capture="environment" onchange="iniciarUpload(this)" />
         </div>
 
-        <div class="btn-box" id="dropZone">
+        <div class="btn-box">
           <span class="btn-title">📄 Enviar PDF ou Galeria</span>
           <span class="btn-sub">Toque para escolher PDF ou foto salva</span>
-          <input type="file" id="fileInput" class="native-file-input" />
+          <input type="file" id="fileInput" class="native-file-input" onchange="iniciarUpload(this)" />
         </div>
       </div>
 
@@ -91,7 +88,7 @@
     <div class="card" id="resultCard" style="display:none;">
       <div class="result-header">
         <strong>Parecer Gasométrico e Condutas:</strong>
-        <button class="copy-btn" id="copyBtn" type="button">Copiar Texto</button>
+        <button class="copy-btn" id="copyBtn" type="button" onclick="copiarTexto()">Copiar Texto</button>
       </div>
       <textarea id="output" readonly></textarea>
     </div>
@@ -99,10 +96,6 @@
 
   <script>
     const WORKER_URL = "https://interpretadorgaso.lgpsluizgabriel.workers.dev";
-
-    if (typeof pdfjsLib !== 'undefined') {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    }
 
     const SYSTEM_INSTRUCTION = `Você é um médico intensivista e emergencista sênior. Analise exclusivamente as gasometrias presentes no laudo (texto ou imagem/foto da fita do gasômetro) e forneça diagnóstico ácido-básico/respiratório completo e condutas clínicas baseadas nas diretrizes atuais (Surviving Sepsis Campaign, ATS/ERS/BTS para insuficiência respiratória e ventilação mecânica, KDIGO e diretrizes de emergências metabólicas).
 
@@ -130,4 +123,92 @@ PARÂMETROS: pH X | pCO2 X | pO2 X | HCO3 X | BE X | satO2 X% | FiO2 X (incluir 
 - [Listar causas prováveis conforme o padrão encontrado]
 
 3. CONDUTAS BASEADAS EM DIRETRIZES:
-- Suporte Ventilatório / Oxigenoterapia (Diretrizes BTS/ERS/ARDSNet): [Indicar alvo de SpO2 (92-96% geral ou 88-92% se retentor crônico de CO2), indicação de CNAF, VNI (acidose respiratória hipercápnica pH < 7,35) ou IOT + ventilação protetora (VC 4-6 mL/kg peso predito, P
+- Suporte Ventilatório / Oxigenoterapia (Diretrizes BTS/ERS/ARDSNet): [Indicar alvo de SpO2 (92-96% geral ou 88-92% se retentor crônico de CO2), indicação de CNAF, VNI (acidose respiratória hipercápnica pH < 7,35) ou IOT + ventilação protetora (VC 4-6 mL/kg peso predito, Pplat < 30 cmH2O)]
+- Manejo Metabólico e Volêmico (Surviving Sepsis / Diretrizes Ácido-Básicas): [Ressuscitação volêmica com cristaloides balanceados se hipoperfusão/lactato elevado; critérios rigorosos para bicarbonato de sódio (apenas se acidemia grave pH < 7,15-7,20 com disfunção orgânica ou perdas renais/digestivas, evitando na acidose láctica pura sem pH crítico); correção de K+ e eletrólitos associados]
+- Monitorização e Exames Complementares: [Coletas necessárias para fechar diagnóstico e controle seriado]
+
+==================================================
+GASO VENOSA (DD/MM/AAAA - HH:MM):
+==================================================
+PARÂMETROS: pH X | pCO2 X | pO2 X | HCO3 X | BE X | satO2 X% (incluir Lactato se presente)
+
+1. DIAGNÓSTICO ÁCIDO-BÁSICO E PERFUSIONAL:
+- Avaliação Ácido-Básica (VR venoso: pH 7,31-7,41 | pCO2 41-51 | HCO3 22-26): [Identificar acidemia/alcalemia venosa e componente metabólico/respiratório]
+- Perfusão e Extração de O2 (SvcO2 / SatvO2 e Lactato): [Avaliar se SvcO2 < 70% sugere baixo débito/aumento da extração tecidual ou se > 80% sugere shunt/disfunção microcirculatória]
+- Limitação Técnica: [Apontar que gasometria venosa não avalia oxigenação arterial (PaO2) e pode superestimar hipercapnia em estados de baixo fluxo]
+
+2. CONDUTAS BASEADAS EM DIRETRIZES:
+- Otimização Hemodinâmica e Perfusional (Surviving Sepsis Campaign): [Teste de responsividade a fluidos, cristaloides balanceados, vasopressor precoce se hipotensão, investigação de foco infeccioso/choque se hiperlactatemia ou SvcO2 baixa]
+- Conduta Diagnóstica: [Indicação de coleta de gasometria arterial pareada caso haja suspeita de insuficiência respiratória ou choque]`;
+
+    function copiarTexto() {
+      const outputEl = document.getElementById('output');
+      const copyBtn = document.getElementById('copyBtn');
+      navigator.clipboard.writeText(outputEl.value);
+      copyBtn.textContent = 'Copiado!';
+      setTimeout(() => copyBtn.textContent = 'Copiar Texto', 1500);
+    }
+
+    function carregarPdfJs() {
+      return new Promise((resolve, reject) => {
+        if (window.pdfjsLib) {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          resolve(window.pdfjsLib);
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+        script.onload = () => {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          resolve(window.pdfjsLib);
+        };
+        script.onerror = () => reject(new Error('Falha ao carregar leitor de PDF. Verifique a internet.'));
+        document.head.appendChild(script);
+      });
+    }
+
+    function prepararImagem(file) {
+      return new Promise((resolve, reject) => {
+        const urlObjeto = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const maxDim = 1000;
+            let width = img.width;
+            let height = img.height;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.80);
+            URL.revokeObjectURL(urlObjeto);
+            const base64 = dataUrl.split(',')[1];
+            resolve({ dataUrl, base64, mimeType: 'image/jpeg' });
+          } catch (err) {
+            URL.revokeObjectURL(urlObjeto);
+            reject(err);
+          }
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(urlObjeto);
+          // Fallback com FileReader se URL.createObjectURL falhar
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const dataUrl = e.target.result;
+            resolve({
+              dataUrl,
+              base64: dataUrl.split(',')[1],
+              mimeType: file.type || 'image/jpeg'
+            });
+          };
+          reader.onerror = () => reject(new Error('Não foi possível ler
