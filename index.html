@@ -15,12 +15,12 @@
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
     .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 540px) { .actions-grid { grid-template-columns: 1fr; } }
-    .btn-action { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 22px 14px; border-radius: 12px; border: 2px dashed var(--border); background: rgba(15, 23, 42, 0.5); color: var(--text); cursor: pointer; font-size: 0.95rem; font-weight: 600; transition: 0.2s; text-align: center; user-select: none; -webkit-tap-highlight-color: transparent; }
+    .btn-action { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 22px 14px; border-radius: 12px; border: 2px dashed var(--border); background: rgba(15, 23, 42, 0.5); color: var(--text); cursor: pointer; font-size: 0.95rem; font-weight: 600; transition: 0.2s; text-align: center; }
     .btn-action:hover, .btn-action.dragover { border-color: var(--accent); background: rgba(14, 165, 233, 0.1); }
     .btn-cam { border-color: rgba(16, 185, 129, 0.5); background: rgba(16, 185, 129, 0.08); }
     .btn-cam:hover { border-color: var(--cam); background: rgba(16, 185, 129, 0.16); }
     .btn-sub { font-size: 0.78rem; font-weight: 400; color: var(--muted); }
-    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+    .offscreen-input { position: fixed; top: -9999px; left: -9999px; opacity: 0; }
     .preview-box { margin-top: 12px; display: none; text-align: center; }
     .preview-box img { max-height: 180px; border-radius: 8px; border: 1px solid var(--border); }
     .result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -37,19 +37,19 @@
 
     <div class="card">
       <div class="actions-grid">
-        <label for="cameraInput" class="btn-action btn-cam">
+        <button type="button" class="btn-action btn-cam" onclick="abrirCamera()">
           <span>📷 Tirar Foto Agora (Celular)</span>
           <span class="btn-sub">Fita impressa ou tela do gasômetro</span>
-        </label>
+        </button>
 
-        <label for="fileInput" class="btn-action" id="dropZone">
+        <button type="button" class="btn-action" id="dropZone" onclick="abrirArquivos()">
           <span>📄 Enviar PDF ou Galeria</span>
           <span class="btn-sub">Toque para escolher PDF ou foto salva</span>
-        </label>
+        </button>
       </div>
 
-      <input type="file" id="cameraInput" accept="image/*" capture="environment" class="visually-hidden" />
-      <input type="file" id="fileInput" class="visually-hidden" />
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" class="offscreen-input" onchange="arquivoSelecionado(this)" />
+      <input type="file" id="fileInput" class="offscreen-input" onchange="arquivoSelecionado(this)" />
 
       <div class="preview-box" id="previewBox">
         <img id="previewImg" alt="Prévia da gasometria" />
@@ -70,6 +70,23 @@
   <script>
     const WORKER_URL = "https://interpretadorgaso.lgpsluizgabriel.workers.dev";
 
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    if (typeof pdfjsLib !== 'undefined') {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
 
-    const SYSTEM_INSTRUCTION = `Você é um médico intensivista e emergencista sênior. Analise exclusivamente as gas
+    const SYSTEM_INSTRUCTION = `Você é um médico intensivista e emergencista sênior. Analise exclusivamente as gasometrias presentes no laudo (texto ou imagem/foto da fita do gasômetro) e forneça diagnóstico ácido-básico/respiratório completo e condutas clínicas baseadas nas diretrizes atuais (Surviving Sepsis Campaign, ATS/ERS/BTS para insuficiência respiratória e ventilação mecânica, KDIGO e diretrizes de emergências metabólicas).
+
+REGRAS ESTRITAS:
+- Proibido Markdown (sem **, *, # ou crases). Use texto puro limpo e bem estruturado.
+- Sem saudações ou introduções genéricas.
+- Ao ler fotos de fitas/telas de gasômetro emitidas na hora: extraia com máxima precisão cada parâmetro impresso (pH, pCO2, pO2, HCO3/cHCO3, BE/BE(ecf), sO2/SatO2, FiO2, Lactato, Na+, K+, Cl-, Ca++, Hb/Hct, Glicose). Se a fita não especificar se a amostra é arterial ou venosa, assuma GASO ARTERIAL caso pO2 > 55 mmHg ou sO2 > 90% (ou conforme padrão clínico evidente) e sinalize isso na observação, mas se identificar claramente como venosa ou arterial, classifique no bloco correspondente.
+- SEPARE RIGOROSAMENTE GASOMETRIA ARTERIAL DE GASOMETRIA VENOSA em blocos independentes com uma linha em branco entre elas. Nunca misture parâmetros arteriais com venosos.
+
+FORMATO OBRIGATÓRIO PARA CADA GASOMETRIA ENCONTRADA:
+
+==================================================
+GASO ARTERIAL (DD/MM/AAAA - HH:MM ou "Emitida na hora"):
+==================================================
+PARÂMETROS: pH X | pCO2 X | pO2 X | HCO3 X | BE X | satO2 X% | FiO2 X (incluir Lactato/eletrólitos/Hb se presentes)
+
+1. DIAGNÓSTICO ÁCIDO-BÁSICO E
